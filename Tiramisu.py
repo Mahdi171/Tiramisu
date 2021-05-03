@@ -8,28 +8,6 @@ from hashlib import sha256 as sha256
 import os
 
 
-def zero_bytes(n):
-    return n * b"\x00"
-
-def to_bytes(l): # where l is a list or bytearray or bytes
-    return bytes(bytearray(l))
-
-def bytes_to_int(bytes):
-    return sum([bi << ((len(bytes) - 1 - i)*8) for i, bi in enumerate(to_bytes(bytes))])
-
-def bytes_to_state(bytes):
-    return [bytes_to_int(bytes[8*w:8*(w+1)]) for w in range(5)]
-
-def int_to_bytes(integer, nbytes):
-    return to_bytes([(integer >> ((nbytes - 1 - i) * 8)) % 256 for i in range(nbytes)])
-
-def rotr(val, r):
-    return ((val >> r) ^ (val << (64-r))) % (1 << 64)
-
-def bytes_to_hex(b):
-    return b.hex()
-    #return "".join(x.encode('hex') for x in b)
-
 
 
 
@@ -143,6 +121,16 @@ def end_bench(group):
     benchmarks = group.GetGeneralBenchmarks()
     real_time = benchmarks['RealTime']
     return real_time
+    
+def to_bytes(l): # where l is a list or bytearray or bytes
+    return bytes(bytearray(l))
+
+def bytes_to_int(bytes):
+    return sum([bi << ((len(bytes) - 1 - i)*8) for i, bi in enumerate(to_bytes(bytes))])
+
+def int_to_bytes(integer, nbytes):
+    return to_bytes([(integer >> ((nbytes - 1 - i) * 8)) % 256 for i in range(nbytes)])
+
 
 groupObj = PairingGroup('BN254')
 Tir = Tiramisu(groupObj)
@@ -178,14 +166,14 @@ def run_round_trip(n):
 
     # Key verification
     Key_verification_time=0
-    
+    '''
     for i in range(3):
         start_bench(groupObj)
         j=Tir.KV(pp,pk,Pi,n)
         Key_verification_time += end_bench(groupObj)
     Key_verification_time=Key_verification_time/3
     result.append(Key_verification_time)
-
+ '''
     # Encryption
     pk_final=pk[n]
     start_bench(groupObj)
@@ -234,4 +222,8 @@ for n in range(1, 2):
 
 book.save("TirResulttest.xlsx")
 
+#print("\nPublic paramters size", public_parameters_size)
+#print("\nPublic key size", public_key_size)
+#print("\nupdated key size", public_updated_key_size)
+#print("\n ciphertext size", ciphertext_size)
 
