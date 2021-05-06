@@ -1,11 +1,22 @@
 from charm.toolbox.pairinggroup import PairingGroup,ZR,G1,G2,GT,pair
 from charm.toolbox.secretutil import SecretUtil
 from charm.toolbox.ABEnc import Input, Output
-from charm.core.engine.util import objectToBytes
+from charm.core.engine.util import objectToBytes, serializeDict
 from openpyxl import load_workbook
 from openpyxl import Workbook
 from hashlib import sha256 as sha256
 import os
+
+
+
+def to_bytes(l): # where l is a list or bytearray or bytes
+    return bytes(bytearray(l))
+
+def bytes_to_int(bytes):
+    return sum([bi << ((len(bytes) - 1 - i)*8) for i, bi in enumerate(to_bytes(bytes))])
+
+def int_to_bytes(integer, nbytes):
+    return to_bytes([(integer >> ((nbytes - 1 - i) * 8)) % 256 for i in range(nbytes)])
 
 
 
@@ -121,16 +132,6 @@ def end_bench(group):
     benchmarks = group.GetGeneralBenchmarks()
     real_time = benchmarks['RealTime']
     return real_time
-    
-def to_bytes(l): # where l is a list or bytearray or bytes
-    return bytes(bytearray(l))
-
-def bytes_to_int(bytes):
-    return sum([bi << ((len(bytes) - 1 - i)*8) for i, bi in enumerate(to_bytes(bytes))])
-
-def int_to_bytes(integer, nbytes):
-    return to_bytes([(integer >> ((nbytes - 1 - i) * 8)) % 256 for i in range(nbytes)])
-
 
 groupObj = PairingGroup('BN254')
 Tir = Tiramisu(groupObj)
@@ -145,44 +146,49 @@ def run_round_trip(n):
     (pp)= Tir.Setup()
     setup_time = end_bench(groupObj)
     result.append(setup_time)
-    public_parameters_size = len(objectToBytes(pp, groupObj))
+    public_parameters_size = sum([len(x) for x in serializeDict(pp, groupObj).values()])
     result.append(public_parameters_size)
     # Key Gen
     start_bench(groupObj)
     (pk[0],Pi[0],sk[0])=Tir.KG(pp)
     Key_Gen_time = end_bench(groupObj)
     result.append(Key_Gen_time)
-    public_key_size = len(objectToBytes(pk[0], groupObj))
+    public_key_size = sum([len(x) for x in serializeDict(pk[0], groupObj).values()])
     result.append(public_key_size)
     # Key Update
-
-    start_bench(groupObj)
-    for i in range(1,n+1):
-        (pk[i],Pi[i],sk[i])=Tir.KU(pp, pk[i-1])
-    Key_update_time = end_bench(groupObj)
+    public_updated_key_size=0
+    Key_update_time=0
+    public_updated_key_size=0
+    for j in range(1000):
+        start_bench(groupObj)
+        for i in range(1,n+1):
+            (pk[i],Pi[i],sk[i])=Tir.KU(pp, pk[i-1])
+        Key_update_time += end_bench(groupObj)
+        public_updated_key_size += sum([len(x) for x in serializeDict(pk[i], groupObj).values()])+sum([len(x) for x in serializeDict(Pi[i], groupObj).values()])
+    
     result.append(Key_update_time)
-    public_updated_key_size = (len(objectToBytes(pk, groupObj))+len(objectToBytes(Pi, groupObj)))/8
-    result.append(public_updated_key_size)
+    #public_updated_key_size = sum([len(x) for x in serializeDict(pk, groupObj).values()])+sum([len(x) for x in serializeDict(Pi1, groupObj).values()])
+    result.append(public_updated_key_size/1000)
+    return result
 
     # Key verification
     Key_verification_time=0
-    '''
-    for i in range(3):
+    for i in range(1):
         start_bench(groupObj)
         j=Tir.KV(pp,pk,Pi,n)
         Key_verification_time += end_bench(groupObj)
-    Key_verification_time=Key_verification_time/3
+    Key_verification_time=Key_verification_time
     result.append(Key_verification_time)
- '''
-    # Encryption
     pk_final=pk[n]
+    # Encryption
+    
     start_bench(groupObj)
     rand_msg = groupObj.random(GT)
     (ct) = Tir.Enc(pp,pk_final,rand_msg)
     encryption_time = end_bench(groupObj)
     encryption_time = encryption_time * 1000
     result.append(encryption_time)
-    Ciphertext_size = len(objectToBytes(ct, groupObj))
+    Ciphertext_size = sum([len(x) for x in serializeDict(ct, groupObj).values()])
     result.append(Ciphertext_size)
     msg = groupObj.random(ZR)
 
@@ -191,7 +197,7 @@ def run_round_trip(n):
     encryption_RO_time = end_bench(groupObj)
     encryption_RO_time = encryption_RO_time * 1000
     result.append(encryption_RO_time)
-    Ciphertext_RO_size = len(objectToBytes(ctRO, groupObj))
+    Ciphertext_RO_size = len(groupObj.serialize(ctRO['c2']))
     result.append(Ciphertext_RO_size)
 
     # Decryption
@@ -208,7 +214,8 @@ def run_round_trip(n):
     decryption_RO_time = end_bench(groupObj)
     decryption_RO_time = decryption_RO_time * 1000
     result.append(decryption_RO_time)
-    return result
+
+    
 
 
 book=Workbook()
@@ -216,7 +223,7 @@ data=book.active
 title=["n","setup_time","public_parameters_size", "Key_Gen_time","public_key_size","Key_update_time","update_key_size", "key_verification_time", "encryption_time" ,"Ciphertext_size","encryption_RO_time","Ciphertext_RO_size","Decryption_time", "decryption_RO_time"]
 data.append(title)
 
-for n in range(1, 2):
+for n in range(10, 101, 5):
     data.append(run_round_trip(n))
     print(n)
 
