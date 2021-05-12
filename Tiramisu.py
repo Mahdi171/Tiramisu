@@ -77,6 +77,32 @@ class Tiramisu():
                 pair(pp['g'], Pi[i]["Pi2"]) == pair(Pi[i]["Pi1"], pp['h'])
         return i
     
+    @Input(pp_t, dict, dict, list, list, list, int)
+    @Output(int)
+    def KVB(self, pp, pk, Pi, r1, r2, r3, n):
+        L1, R1, L2, R2, L3, R3 = 1, 1, 1, 1, 1, 1 
+        for i in range(n):
+            if i==0:
+                L1 = Pi[i]["Pi1"]
+                R1 = pk[i]["pk2"]
+                L2 = Pi[i]["Pi2"]
+                R2 = pk[i]["pk1"]
+                L3 = Pi[i]["Pi2"]
+                R3 = Pi[i]["Pi1"]
+            else:
+                L1 *= (pk[i-1]["pk1"] * Pi[i]["Pi1"]) ** r1[i]
+                R1 *= pk[i]["pk2"] ** r1[i]
+                L2 *= (pk[i-1]["pk2"] * Pi[i]["Pi2"]) ** r2[i]
+                R2 *= pk[i]["pk1"] ** r2[i]
+                L3 *= Pi[i]["Pi2"] ** r3[i]
+                R3 *= Pi[i]["Pi1"] ** r3[i]
+        if pair(L1,pp['h']) == pair(pp['g'], R1) and \
+            pair(pp['g'], L2) == pair(R2,pp['h']) and \
+                    pair(pp['g'], L3) == pair(R3, pp['h']):
+                    return 1
+        else:
+            return 0
+
     @Input(pp_t, pk_t, GT)
     @Output(ct_t)
     def Enc(self, pp, pk_final, mes):
@@ -159,29 +185,38 @@ def run_round_trip(n):
     public_updated_key_size=0
     Key_update_time=0
     public_updated_key_size=0
-    for j in range(1000):
+    for j in range(100):
         start_bench(groupObj)
         for i in range(1,n+1):
-            (pk[i],Pi[i],sk[i])=Tir.KU(pp, pk[i-1])
-        Key_update_time += end_bench(groupObj)
-        public_updated_key_size += sum([len(x) for x in serializeDict(pk[i], groupObj).values()])+sum([len(x) for x in serializeDict(Pi[i], groupObj).values()])
-    
-    result.append(Key_update_time)
+            (pk[i],Pi[i],sk[i]) = Tir.KU(pp, pk[i-1])
+            Key_update_time += end_bench(groupObj)
+            public_updated_key_size += sum([len(x) for x in serializeDict(pk[i], groupObj).values()])+sum([len(x) for x in serializeDict(Pi[i], groupObj).values()])
+    result.append(Key_update_time/100)
     #public_updated_key_size = sum([len(x) for x in serializeDict(pk, groupObj).values()])+sum([len(x) for x in serializeDict(Pi1, groupObj).values()])
-    result.append(public_updated_key_size/1000)
-    return result
-
-    # Key verification
+    result.append(public_updated_key_size/100000)
+       # Key verification
     Key_verification_time=0
-    for i in range(1):
+    for i in range(50):
         start_bench(groupObj)
-        j=Tir.KV(pp,pk,Pi,n)
+        j=Tir.KV(pp,pk,Pi,n+1)
         Key_verification_time += end_bench(groupObj)
-    Key_verification_time=Key_verification_time
-    result.append(Key_verification_time)
+    result.append(Key_verification_time/50)
     pk_final=pk[n]
     # Encryption
-    
+    r1, r2, r3 = [], [], []
+    for i in range(n+1):
+        r1. append(groupObj.random(ZR))
+    for i in range(n+1):
+        r2. append(groupObj.random(ZR))
+    for i in range(n+1):
+        r3. append(groupObj.random(ZR))
+    Batched_Key_verification_time=0
+    for i in range(50):
+        start_bench(groupObj)
+        out=Tir.KVB(pp,pk,Pi,r1,r2,r3,n+1)
+        Batched_Key_verification_time += end_bench(groupObj)
+    result.append(Batched_Key_verification_time/50)
+
     start_bench(groupObj)
     rand_msg = groupObj.random(GT)
     (ct) = Tir.Enc(pp,pk_final,rand_msg)
@@ -214,23 +249,21 @@ def run_round_trip(n):
     decryption_RO_time = end_bench(groupObj)
     decryption_RO_time = decryption_RO_time * 1000
     result.append(decryption_RO_time)
-
-    
+    return result
 
 
 book=Workbook()
 data=book.active
-title=["n","setup_time","public_parameters_size", "Key_Gen_time","public_key_size","Key_update_time","update_key_size", "key_verification_time", "encryption_time" ,"Ciphertext_size","encryption_RO_time","Ciphertext_RO_size","Decryption_time", "decryption_RO_time"]
+title=["n","setup_time","public_parameters_size", "Key_Gen_time","public_key_size","Key_update_time","update_key_size", "key_verification_time", "Batched_Key_verification_time", "encryption_time" ,"Ciphertext_size","encryption_RO_time","Ciphertext_RO_size","Decryption_time", "decryption_RO_time"]
 data.append(title)
 
-for n in range(10, 101, 5):
+for n in range(10,51,5):
     data.append(run_round_trip(n))
     print(n)
 
-book.save("TirResulttest.xlsx")
+book.save("TirResult20.xlsx")
 
 #print("\nPublic paramters size", public_parameters_size)
 #print("\nPublic key size", public_key_size)
 #print("\nupdated key size", public_updated_key_size)
 #print("\n ciphertext size", ciphertext_size)
-
