@@ -7,8 +7,7 @@ from openpyxl import Workbook
 from hashlib import sha256 as sha256
 import os
 
-
-
+#Preliminaries functions:
 def to_bytes(l): # where l is a list or bytearray or bytes
     return bytes(bytearray(l))
 
@@ -18,30 +17,28 @@ def bytes_to_int(bytes):
 def int_to_bytes(integer, nbytes):
     return to_bytes([(integer >> ((nbytes - 1 - i) * 8)) % 256 for i in range(nbytes)])
 
-
-
-
-
+#List of tuples 
 pp_t = { 'g':G1, 'h':G2, 'e_gh': GT }
 pk_t = { 'pk1':G1, 'pk2':G2}
 sk_t = { 'sk':ZR }
 Pi_t = { 'Pi1': G1, 'Pi2': G2 }
 ct_t = {'c1': GT, 'c2': GT}
 ctRO_t = {'c1': int, 'c2': G1}
+
+#Main code:
 class Tiramisu():
-         
     def __init__(self, groupObj):
         global util, group
         util = SecretUtil(groupObj, verbose=False)
         group = groupObj
-    
+#The Setup:
     @Output(pp_t)    
     def Setup(self):
         g, h = group.random(G1), group.random(G2)
         g.initPP(); h.initPP()
         e_gh = pair(g,h)
         return { 'g': g, 'h': h, 'e_gh': e_gh }
-
+#Initial Key generation phase
     @Input(pp_t)
     @Output(pk_t, Pi_t, sk_t)    
     def KG(self,pp):
@@ -51,7 +48,7 @@ class Tiramisu():
         sk = { 'sk': seck }
         Pi = { 'Pi1': pk1, 'Pi2': pk2 }
         return (pk, Pi, sk)
-
+#Key updating phase:
     @Input(pp_t, pk_t)
     @Output(pk_t, Pi_t, sk_t)
     def KU(self, pp, pk):
@@ -62,7 +59,7 @@ class Tiramisu():
         Pi = {'Pi1': Pi1, 'Pi2': Pi2}
         sk = {'sk': seck}
         return (pk, Pi, sk)
-
+#Key Verification phase: 
     @Input(pp_t, dict, dict, int)
     @Output(int)
     def KV(self, pp, pk, Pi, n):
@@ -77,6 +74,7 @@ class Tiramisu():
                 pair(pp['g'], Pi[i]["Pi2"]) == pair(Pi[i]["Pi1"], pp['h'])
         return i
     
+#Batched key verification algorithm:
     @Input(pp_t, dict, dict, list, list, list, int)
     @Output(int)
     def KVB(self, pp, pk, Pi, r1, r2, r3, n):
@@ -102,7 +100,7 @@ class Tiramisu():
                     return 1
         else:
             return 0
-
+#Standard Encryption algorithm:
     @Input(pp_t, pk_t, GT)
     @Output(ct_t)
     def Enc(self, pp, pk_final, mes):
@@ -111,7 +109,7 @@ class Tiramisu():
         c2 = pp['e_gh'] ** r
         return {'c1': c1, 'c2': c2}
 
-    
+#Hash-based encryption algorithm:    
     @Input(pp_t, pk_t, ZR)
     @Output(ctRO_t)
     def EncRO(self, pp, pk_final, mes):
@@ -126,7 +124,7 @@ class Tiramisu():
         c1 = mes2 ^ hash2
         c2 = pp['g'] ** r
         return {'c1': c1, 'c2': c2}
-
+# Standard Decryption algorithm:
     @Input(pp_t, dict, ct_t)
     @Output(GT)
     def Dec(self, pp, sk, ct):
@@ -134,7 +132,7 @@ class Tiramisu():
         for i in sk:
             sec += sk[i]['sk']
         return ct['c1']/(ct['c2']**sec)
-
+# Hash-based decryption algorithm:
     @Input(pp_t, dict, ctRO_t)
     @Output(int)
     def DecRO(self, pp, sk, ctRO):
